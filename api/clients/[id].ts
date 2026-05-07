@@ -1,8 +1,8 @@
-import { prisma } from '../lib/prisma';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
+    const { prisma } = await import('../lib/prisma');
     const { id } = req.query;
 
     if (typeof id !== 'string') {
@@ -36,11 +36,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     return res.status(405).json({ error: 'Method not allowed' });
-  } catch (fatalError) {
+  } catch (fatalError: any) {
     console.error('FATAL API ERROR:', fatalError);
     return res.status(500).json({ 
-      error: 'Fatal Server Error', 
-      details: fatalError instanceof Error ? fatalError.message : String(fatalError) 
+      error: 'Prisma Initialization Error', 
+      details: fatalError?.message || String(fatalError)
     });
   }
 }
