@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { useClientStore, ClientStatus } from '../store/clientStore';
-import { StatusBadge } from './StatusBadge';
 import { Trash2 } from 'lucide-react';
 
 const getStatusClass = (status: ClientStatus) => {

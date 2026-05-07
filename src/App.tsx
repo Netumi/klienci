@@ -6,7 +6,7 @@ import { Plus, Search, Filter } from 'lucide-react';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients, isLoading } = useClientStore();
+  const { searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients } = useClientStore();
 
   React.useEffect(() => {
     fetchClients();

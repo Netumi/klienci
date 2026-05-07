@@ -31,7 +31,7 @@ interface ClientState {
   setFilterStatus: (status: ClientStatus | 'All') => void;
 }
 
-export const useClientStore = create<ClientState>((set, get) => ({
+export const useClientStore = create<ClientState>((set) => ({
   clients: [],
   isLoading: false,
   searchQuery: '',
