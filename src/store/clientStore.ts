@@ -57,7 +57,10 @@ export const useClientStore = create<ClientState>((set) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(clientData),
       });
-      if (!response.ok) throw new Error('Failed to add client');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.details || errorData.error || 'Failed to add client');
+      }
       const newClient = await response.json();
       set((state) => ({
         clients: [newClient, ...state.clients],

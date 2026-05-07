@@ -39,7 +39,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
       });
       onClose();
     } catch (err) {
-      setError('Wystąpił błąd podczas dodawania klienta. Spróbuj ponownie.');
+      setError(`Błąd: ${err instanceof Error ? err.message : 'Wystąpił błąd podczas dodawania klienta'}`);
       console.error(err);
     } finally {
       setIsLoading(false);
