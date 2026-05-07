@@ -1,8 +1,12 @@
+import { PrismaClient } from '@prisma/client';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+const prisma = new PrismaClient({
+  log: ['error', 'warn'],
+});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
-    const { prisma } = await import('../lib/prisma');
     const { id } = req.query;
 
     if (typeof id !== 'string') {
@@ -39,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (fatalError: any) {
     console.error('FATAL API ERROR:', fatalError);
     return res.status(500).json({ 
-      error: 'Prisma Initialization Error', 
+      error: 'Prisma Execution Error', 
       details: fatalError?.message || String(fatalError)
     });
   }
