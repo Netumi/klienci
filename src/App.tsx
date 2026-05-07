@@ -58,6 +58,23 @@ function App() {
       </main>
 
       {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} />}
+
+      <footer style={{ marginTop: '4rem', padding: '1rem', borderTop: '1px solid var(--border-color)', opacity: 0.5, textAlign: 'center' }}>
+        <button 
+          onClick={async () => {
+            try {
+              const res = await fetch('/api/debug');
+              const data = await res.json();
+              alert(`Aktualny POSTGRES_URL: ${data.POSTGRES_URL}`);
+            } catch (e) {
+              alert('Błąd podczas pobierania debug info');
+            }
+          }}
+          style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          [DEBUG: Pokaż POSTGRES_URL]
+        </button>
+      </footer>
     </div>
   );
 }
