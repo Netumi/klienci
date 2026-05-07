@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-const prisma = new PrismaClient();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { id } = req.query;
@@ -19,7 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return res.status(200).json(client);
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to update client' });
+      console.error('PATCH Error:', error);
+      return res.status(500).json({ error: 'Failed to update client', details: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -30,7 +29,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return res.status(204).end();
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to delete client' });
+      console.error('DELETE Error:', error);
+      return res.status(500).json({ error: 'Failed to delete client', details: error instanceof Error ? error.message : String(error) });
     }
   }
 

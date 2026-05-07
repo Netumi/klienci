@@ -64,6 +64,7 @@ export const useClientStore = create<ClientState>((set) => ({
       }));
     } catch (error) {
       console.error(error);
+      throw error;
     }
   },
 

@@ -1,7 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-const prisma = new PrismaClient();
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') {
@@ -11,7 +9,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return res.status(200).json(clients);
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to fetch clients' });
+      console.error('GET Error:', error);
+      return res.status(500).json({ error: 'Failed to fetch clients', details: error instanceof Error ? error.message : String(error) });
     }
   }
 
@@ -23,7 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
       return res.status(201).json(client);
     } catch (error) {
-      return res.status(500).json({ error: 'Failed to create client' });
+      console.error('POST Error:', error);
+      return res.status(500).json({ error: 'Failed to create client', details: error instanceof Error ? error.message : String(error) });
     }
   }
 

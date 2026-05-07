@@ -13,9 +13,11 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<ClientStatus>(ClientStatus.Wysłane);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
     if (!name.trim()) {
       setError('Imię i nazwisko są wymagane');
@@ -28,13 +30,20 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
       return;
     }
 
-    addClient({
-      name: name.trim(),
-      email: email.trim(),
-      status,
-    });
-    
-    onClose();
+    setIsLoading(true);
+    try {
+      await addClient({
+        name: name.trim(),
+        email: email.trim(),
+        status,
+      });
+      onClose();
+    } catch (err) {
+      setError('Wystąpił błąd podczas dodawania klienta. Spróbuj ponownie.');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -89,8 +98,8 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Anuluj
             </button>
-            <button type="submit" className="btn btn-primary">
-              Dodaj klienta
+            <button type="submit" className="btn btn-primary" disabled={isLoading}>
+              {isLoading ? 'Dodawanie...' : 'Dodaj klienta'}
             </button>
           </div>
         </form>
