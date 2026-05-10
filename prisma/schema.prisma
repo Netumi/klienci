@@ -10,8 +10,8 @@ datasource db {
 
 model Client {
   id        String   @id @default(cuid())
-  email     String   @unique
-  phone     String   @default("")
+  email     String?  @unique
+  phone     String?  @unique
   status    String   @default("Wysłane")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

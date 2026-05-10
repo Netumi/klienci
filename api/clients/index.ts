@@ -20,20 +20,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'POST') {
       try {
         const { email, phone, status } = req.body;
-        const normalizedEmail = email.toLowerCase().trim();
+        
+        if (!email && !phone) {
+          return res.status(400).json({ error: 'Validation Error', details: 'Podaj email lub numer telefonu.' });
+        }
+
+        const normalizedEmail = email ? email.toLowerCase().trim() : null;
+        const normalizedPhone = phone ? phone.trim() : null;
 
         // Duplicate check
         const existingClient = await prisma.client.findFirst({
           where: {
             OR: [
-              { email: normalizedEmail },
-              { phone: phone.trim() }
+              ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+              ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
             ]
           }
         });
 
         if (existingClient) {
-          const isEmailMatch = existingClient.email.toLowerCase() === normalizedEmail;
+          const isEmailMatch = normalizedEmail && existingClient.email === normalizedEmail;
           const field = isEmailMatch ? 'Email' : 'Numer telefonu';
           return res.status(400).json({ 
             error: 'Duplicate client', 
@@ -44,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const client = await prisma.client.create({
           data: { 
             email: normalizedEmail, 
-            phone: phone.trim(), 
+            phone: normalizedPhone, 
             status 
           },
         });

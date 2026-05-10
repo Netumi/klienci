@@ -19,22 +19,24 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
     e.preventDefault();
     setError('');
     
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setError('Podaj prawidłowy adres email');
+    if (!email.trim() && !phone.trim()) {
+      setError('Podaj email lub numer telefonu');
       return;
     }
-
-    if (!phone.trim()) {
-      setError('Numer telefonu jest wymagany');
-      return;
+    
+    if (email.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        setError('Podaj prawidłowy adres email');
+        return;
+      }
     }
 
     setIsLoading(true);
     try {
       await addClient({
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
+        email: email.trim() ? email.trim().toLowerCase() : undefined,
+        phone: phone.trim() ? phone.trim() : undefined,
         status,
       });
       onClose();
@@ -60,7 +62,7 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
         
         <form onSubmit={handleSubmit} style={formStyle}>
           <div style={inputGroupStyle}>
-            <label>Email *</label>
+            <label>Email</label>
             <input 
               type="email" 
               value={email} 
@@ -70,13 +72,17 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
           </div>
           
           <div style={inputGroupStyle}>
-            <label>Numer telefonu *</label>
+            <label>Numer telefonu</label>
             <input 
               type="tel" 
               value={phone} 
               onChange={(e) => setPhone(e.target.value)} 
               placeholder="+48 123 456 789"
             />
+          </div>
+          
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '-0.5rem' }}>
+            * Wymagany przynajmniej jeden z powyższych kontaktów
           </div>
           
           <div style={inputGroupStyle}>
