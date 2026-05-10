@@ -1,9 +1,5 @@
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-const prisma = new PrismaClient({
-  log: ['error', 'warn'],
-});
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -21,9 +17,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'POST') {
       try {
-        const { name, email, status } = req.body;
+        const { email, phone, status } = req.body;
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // Duplicate check
+        const existingClient = await prisma.client.findFirst({
+          where: {
+            OR: [
+              { email: normalizedEmail },
+              { phone: phone.trim() }
+            ]
+          }
+        });
+
+        if (existingClient) {
+          const isEmailMatch = existingClient.email.toLowerCase() === normalizedEmail;
+          const field = isEmailMatch ? 'Email' : 'Numer telefonu';
+          return res.status(400).json({ 
+            error: 'Duplicate client', 
+            details: `Klient o podanym ${field.toLowerCase()} już istnieje w bazie.` 
+          });
+        }
+
         const client = await prisma.client.create({
-          data: { name, email, status },
+          data: { 
+            email: normalizedEmail, 
+            phone: phone.trim(), 
+            status 
+          },
         });
         return res.status(201).json(client);
       } catch (error) {

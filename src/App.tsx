@@ -6,7 +6,19 @@ import { Plus, Search, Filter } from 'lucide-react';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const { searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients } = useClientStore();
+  const { clients, searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients } = useClientStore();
+
+  const stats = React.useMemo(() => {
+    const counts = Object.values(ClientStatus).reduce((acc, status) => {
+      acc[status] = clients.filter(c => c.status === status).length;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    return {
+      ...counts,
+      Total: clients.length
+    };
+  }, [clients]);
 
   React.useEffect(() => {
     fetchClients();
@@ -26,12 +38,25 @@ function App() {
         </button>
       </header>
 
+      <div style={statsGridStyle}>
+        <div style={{ ...statCardStyle, borderLeft: '4px solid var(--primary)' }}>
+          <div style={statLabelStyle}>Wszyscy klienci</div>
+          <div style={statValueStyle}>{stats.Total}</div>
+        </div>
+        {Object.values(ClientStatus).map((status) => (
+          <div key={status} style={statCardStyle}>
+            <div style={statLabelStyle}>{status}</div>
+            <div style={statValueStyle}>{stats[status] || 0}</div>
+          </div>
+        ))}
+      </div>
+
       <div style={controlsStyle}>
         <div style={searchWrapperStyle}>
           <Search size={20} style={searchIconStyle} />
           <input 
             type="text" 
-            placeholder="Szukaj po nazwie lub emailu..." 
+            placeholder="Szukaj po emailu lub telefonie..." 
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={searchInputStyle}
@@ -120,6 +145,39 @@ const filterSelectStyle: React.CSSProperties = {
   padding: '0.5rem',
   width: '100%',
   minWidth: '180px',
+};
+
+const statsGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+  gap: '1rem',
+  marginBottom: '2rem',
+};
+
+const statCardStyle: React.CSSProperties = {
+  background: 'rgba(0,0,0,0.2)',
+  padding: '1rem',
+  borderRadius: 'var(--radius-md)',
+  border: '1px solid var(--border-color)',
+  display: 'flex',
+  flexDirection: 'column',
+  justifyContent: 'center',
+  transition: 'transform 0.2s, box-shadow 0.2s',
+};
+
+const statLabelStyle: React.CSSProperties = {
+  fontSize: '0.7rem',
+  color: 'var(--text-muted)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  fontWeight: 600,
+};
+
+const statValueStyle: React.CSSProperties = {
+  fontSize: '1.75rem',
+  fontWeight: 'bold',
+  marginTop: '0.25rem',
+  color: 'var(--text-main)',
 };
 
 export default App;

@@ -9,8 +9,8 @@ interface ClientModalProps {
 export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
   const addClient = useClientStore((state) => state.addClient);
   
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [status, setStatus] = useState<ClientStatus>(ClientStatus.Wysłane);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,22 +19,22 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
     e.preventDefault();
     setError('');
     
-    if (!name.trim()) {
-      setError('Imię i nazwisko są wymagane');
-      return;
-    }
-    
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       setError('Podaj prawidłowy adres email');
       return;
     }
 
+    if (!phone.trim()) {
+      setError('Numer telefonu jest wymagany');
+      return;
+    }
+
     setIsLoading(true);
     try {
       await addClient({
-        name: name.trim(),
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
         status,
       });
       onClose();
@@ -60,22 +60,22 @@ export const ClientModal: React.FC<ClientModalProps> = ({ onClose }) => {
         
         <form onSubmit={handleSubmit} style={formStyle}>
           <div style={inputGroupStyle}>
-            <label>Imię i nazwisko *</label>
-            <input 
-              type="text" 
-              value={name} 
-              onChange={(e) => setName(e.target.value)} 
-              placeholder="Jan Kowalski"
-            />
-          </div>
-          
-          <div style={inputGroupStyle}>
             <label>Email *</label>
             <input 
               type="email" 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               placeholder="jan@example.com"
+            />
+          </div>
+          
+          <div style={inputGroupStyle}>
+            <label>Numer telefonu *</label>
+            <input 
+              type="tel" 
+              value={phone} 
+              onChange={(e) => setPhone(e.target.value)} 
+              placeholder="+48 123 456 789"
             />
           </div>
           

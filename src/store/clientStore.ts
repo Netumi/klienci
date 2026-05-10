@@ -12,8 +12,8 @@ export type ClientStatus = typeof ClientStatus[keyof typeof ClientStatus];
 
 export interface Client {
   id: string;
-  name: string;
   email: string;
+  phone: string;
   status: ClientStatus;
   createdAt: string; // From JSON
 }
