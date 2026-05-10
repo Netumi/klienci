@@ -25,8 +25,8 @@ export const ClientList: React.FC = () => {
   const filteredClients = useMemo(() => {
     return clients.filter((client) => {
       const matchesSearch = 
-        client.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        client.phone.toLowerCase().includes(searchQuery.toLowerCase());
+        (client.email?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
+        (client.phone?.toLowerCase() || '').includes(searchQuery.toLowerCase());
       
       const matchesFilter = filterStatus === 'All' || client.status === filterStatus;
 
