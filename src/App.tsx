@@ -17,7 +17,7 @@ function App() {
     return {
       ...counts,
       Total: clients.length
-    };
+    } as Record<string, number>;
   }, [clients]);
 
   React.useEffect(() => {
