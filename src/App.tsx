@@ -70,7 +70,9 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || data.details || 'Błąd inicjalizacji płatności');
+        const errorMsg = data.error || 'Błąd inicjalizacji płatności';
+        const errorDetails = data.details ? ` | Debug: ${typeof data.details === 'object' ? JSON.stringify(data.details) : data.details}` : '';
+        throw new Error(`${errorMsg}${errorDetails}`);
       }
 
       if (data.url) {
@@ -85,66 +87,68 @@ function App() {
   };
 
   return (
-    <div style={containerStyle} className="animate-fade-in">
-      <header style={headerStyle}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>Zarządzanie Klientami</h1>
-          <p style={{ color: 'var(--text-muted)' }}>Panel administracyjny CRM</p>
-        </div>
-        
-        <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-          <Plus size={20} />
-          Dodaj klienta
-        </button>
-      </header>
-
-      <div style={statsGridStyle}>
-        <div style={{ ...statCardStyle, borderLeft: '4px solid var(--primary)' }}>
-          <div style={statLabelStyle}>Wszyscy klienci</div>
-          <div style={statValueStyle}>{stats.Total}</div>
-        </div>
-        {Object.values(ClientStatus).map((status) => (
-          <div key={status} style={statCardStyle}>
-            <div style={statLabelStyle}>{status}</div>
-            <div style={statValueStyle}>{stats[status] || 0}</div>
+    <>
+      <div style={containerStyle} className="animate-fade-in">
+        <header style={headerStyle}>
+          <div>
+            <h1 style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>Zarządzanie Klientami</h1>
+            <p style={{ color: 'var(--text-muted)' }}>Panel administracyjny CRM</p>
           </div>
-        ))}
+          
+          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={20} />
+            Dodaj klienta
+          </button>
+        </header>
+
+        <div style={statsGridStyle}>
+          <div style={{ ...statCardStyle, borderLeft: '4px solid var(--primary)' }}>
+            <div style={statLabelStyle}>Wszyscy klienci</div>
+            <div style={statValueStyle}>{stats.Total}</div>
+          </div>
+          {Object.values(ClientStatus).map((status) => (
+            <div key={status} style={statCardStyle}>
+              <div style={statLabelStyle}>{status}</div>
+              <div style={statValueStyle}>{stats[status] || 0}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={controlsStyle}>
+          <div style={searchWrapperStyle}>
+            <Search size={20} style={searchIconStyle} />
+            <input 
+              type="text" 
+              placeholder="Szukaj po emailu lub telefonie..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={searchInputStyle}
+            />
+          </div>
+          
+          <div style={filterWrapperStyle}>
+            <Filter size={20} style={{ color: 'var(--text-muted)' }} />
+            <select 
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as ClientStatus | 'All')}
+              style={filterSelectStyle}
+            >
+              <option value="All" style={{ background: '#181b21', color: 'white' }}>Wszystkie statusy</option>
+              {Object.values(ClientStatus).map((s) => (
+                <option key={s} value={s} style={{ background: '#181b21', color: 'white' }}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <main>
+          <ClientList />
+        </main>
+
+        {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} />}
       </div>
 
-      <div style={controlsStyle}>
-        <div style={searchWrapperStyle}>
-          <Search size={20} style={searchIconStyle} />
-          <input 
-            type="text" 
-            placeholder="Szukaj po emailu lub telefonie..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={searchInputStyle}
-          />
-        </div>
-        
-        <div style={filterWrapperStyle}>
-          <Filter size={20} style={{ color: 'var(--text-muted)' }} />
-          <select 
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as ClientStatus | 'All')}
-            style={filterSelectStyle}
-          >
-            <option value="All" style={{ background: '#181b21', color: 'white' }}>Wszystkie statusy</option>
-            {Object.values(ClientStatus).map((s) => (
-              <option key={s} value={s} style={{ background: '#181b21', color: 'white' }}>{s}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <main>
-        <ClientList />
-      </main>
-
-      {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} />}
-
-      {/* Floating PAY button */}
+      {/* Floating PAY button - placed outside container to ensure fixed positioning relative to viewport */}
       <button
         onClick={() => setIsPayModalOpen(true)}
         style={floatingPayButtonStyle}
@@ -153,7 +157,7 @@ function App() {
         PAY
       </button>
 
-      {/* Payment Modal with required payer details */}
+      {/* Payment Modal */}
       {isPayModalOpen && (
         <div style={overlayStyle}>
           <div className="card animate-modal" style={modalStyle}>
@@ -232,7 +236,7 @@ function App() {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
@@ -333,7 +337,7 @@ const floatingPayButtonStyle: React.CSSProperties = {
   position: 'fixed',
   bottom: '20px',
   right: '20px',
-  zIndex: 1000,
+  zIndex: 9999,
   backgroundColor: 'var(--primary, #6366f1)',
   color: 'white',
   border: 'none',
@@ -362,7 +366,7 @@ const overlayStyle: React.CSSProperties = {
   display: 'grid',
   placeItems: 'center',
   padding: '1rem',
-  zIndex: 2000,
+  zIndex: 10000,
   overflowY: 'auto',
 };
 
@@ -410,8 +414,9 @@ const errorStyle: React.CSSProperties = {
   color: '#f87171',
   padding: '0.75rem',
   borderRadius: '6px',
-  fontSize: '0.875rem',
+  fontSize: '0.8125rem',
   marginBottom: '1rem',
+  wordBreak: 'break-all',
 };
 
 const footerStyle: React.CSSProperties = {
