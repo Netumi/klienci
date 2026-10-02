@@ -6,10 +6,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { amount } = req.body;
+    const { amount, name, email, phone } = req.body;
 
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return res.status(400).json({ error: 'Nieprawidłowa kwota' });
+      return res.status(400).json({ error: 'Podaj prawidłową kwotę' });
+    }
+
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Podaj prawidłowy adres e-mail płatnika' });
+    }
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Podaj imię i nazwisko płatnika' });
     }
 
     const clientId = process.env.TPAY_CLIENT_ID;
@@ -53,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const errorUrl = `${protocol}://${host}/?error=true`;
     const webhookUrl = `${protocol}://${host}/api/webhook`;
 
-    // Step 2: Create transaction
+    // Step 2: Create transaction with dynamic payer details
     const transactionResponse = await fetch('https://openapi.tpay.com/transactions', {
       method: 'POST',
       headers: {
@@ -62,11 +70,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
       body: JSON.stringify({
         amount: Number(amount),
-        description: `Opłata w systemie Klienci App - ${amount} PLN`,
+        description: `Opłata - ${name.trim()} (${amount} PLN)`,
         lang: 'pl',
         payer: {
-          email: 'klient@testowy.pl',
-          name: 'Klient Testowy',
+          email: email.trim(),
+          name: name.trim(),
+          ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
         },
         callbacks: {
           payerUrls: {

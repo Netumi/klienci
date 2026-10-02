@@ -8,6 +8,9 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [payAmount, setPayAmount] = useState('100.00');
+  const [payName, setPayName] = useState('');
+  const [payEmail, setPayEmail] = useState('');
+  const [payPhone, setPayPhone] = useState('');
   const [isPayLoading, setIsPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
 
@@ -39,6 +42,16 @@ function App() {
       return;
     }
 
+    if (!payName.trim()) {
+      setPayError('Podaj imię i nazwisko płatnika');
+      return;
+    }
+
+    if (!payEmail.trim() || !payEmail.includes('@')) {
+      setPayError('Podaj prawidłowy adres e-mail płatnika');
+      return;
+    }
+
     setIsPayLoading(true);
     try {
       const response = await fetch('/api/checkout', {
@@ -46,7 +59,12 @@ function App() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount: parsedAmount }),
+        body: JSON.stringify({
+          amount: parsedAmount,
+          name: payName.trim(),
+          email: payEmail.trim(),
+          phone: payPhone.trim(),
+        }),
       });
 
       const data = await response.json();
@@ -135,7 +153,7 @@ function App() {
         PAY
       </button>
 
-      {/* Payment Modal */}
+      {/* Payment Modal with required payer details */}
       {isPayModalOpen && (
         <div style={overlayStyle}>
           <div className="card animate-modal" style={modalStyle}>
@@ -159,6 +177,38 @@ function App() {
                   onChange={(e) => setPayAmount(e.target.value)}
                   placeholder="100.00"
                   required
+                />
+              </div>
+
+              <div style={inputGroupStyle}>
+                <label>Imię i nazwisko</label>
+                <input
+                  type="text"
+                  value={payName}
+                  onChange={(e) => setPayName(e.target.value)}
+                  placeholder="Jan Kowalski"
+                  required
+                />
+              </div>
+
+              <div style={inputGroupStyle}>
+                <label>Adres e-mail</label>
+                <input
+                  type="email"
+                  value={payEmail}
+                  onChange={(e) => setPayEmail(e.target.value)}
+                  placeholder="jan@example.com"
+                  required
+                />
+              </div>
+
+              <div style={inputGroupStyle}>
+                <label>Telefon (opcjonalnie)</label>
+                <input
+                  type="tel"
+                  value={payPhone}
+                  onChange={(e) => setPayPhone(e.target.value)}
+                  placeholder="+48 123 456 789"
                 />
               </div>
 
@@ -291,6 +341,7 @@ const floatingPayButtonStyle: React.CSSProperties = {
   padding: '0.85rem 1.75rem',
   fontSize: '1rem',
   fontWeight: 'bold',
+  fontFamily: 'inherit',
   cursor: 'pointer',
   boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
   transition: 'transform 0.2s, background-color 0.2s',
@@ -317,7 +368,7 @@ const overlayStyle: React.CSSProperties = {
 
 const modalStyle: React.CSSProperties = {
   width: '100%',
-  maxWidth: '400px',
+  maxWidth: '450px',
   padding: '1.5rem',
   boxShadow: 'var(--shadow-lg)',
   background: '#181b21',
