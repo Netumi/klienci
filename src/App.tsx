@@ -6,6 +6,11 @@ import { Plus, Search, Filter } from 'lucide-react';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [payAmount, setPayAmount] = useState('100.00');
+  const [isPayLoading, setIsPayLoading] = useState(false);
+  const [payError, setPayError] = useState('');
+
   const { clients, searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients } = useClientStore();
 
   const stats = React.useMemo(() => {
@@ -23,6 +28,43 @@ function App() {
   React.useEffect(() => {
     fetchClients();
   }, [fetchClients]);
+
+  const handlePaySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPayError('');
+
+    const parsedAmount = parseFloat(payAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      setPayError('Podaj prawidłową kwotę większą od zera');
+      return;
+    }
+
+    setIsPayLoading(true);
+    try {
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ amount: parsedAmount }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || data.details || 'Błąd inicjalizacji płatności');
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('Brak adresu URL płatności w odpowiedzi serwera');
+      }
+    } catch (err) {
+      setPayError(err instanceof Error ? err.message : String(err));
+      setIsPayLoading(false);
+    }
+  };
 
   return (
     <div style={containerStyle} className="animate-fade-in">
@@ -83,6 +125,63 @@ function App() {
       </main>
 
       {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} />}
+
+      {/* Floating PAY button */}
+      <button
+        onClick={() => setIsPayModalOpen(true)}
+        style={floatingPayButtonStyle}
+        title="Zapłać przez Tpay"
+      >
+        PAY
+      </button>
+
+      {/* Payment Modal */}
+      {isPayModalOpen && (
+        <div style={overlayStyle}>
+          <div className="card animate-modal" style={modalStyle}>
+            <div style={modalHeaderStyle}>
+              <h2>Płatność Tpay</h2>
+              <button onClick={() => setIsPayModalOpen(false)} style={closeBtnStyle}>
+                ✕
+              </button>
+            </div>
+
+            {payError && <div style={errorStyle}>{payError}</div>}
+
+            <form onSubmit={handlePaySubmit} style={formStyle}>
+              <div style={inputGroupStyle}>
+                <label>Kwota (PLN)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  placeholder="100.00"
+                  required
+                />
+              </div>
+
+              <div style={footerStyle}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsPayModalOpen(false)}
+                >
+                  Anuluj
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isPayLoading}
+                >
+                  {isPayLoading ? 'Przetwarzanie...' : 'Zapłać'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -178,6 +277,97 @@ const statValueStyle: React.CSSProperties = {
   fontWeight: 'bold',
   marginTop: '0.25rem',
   color: 'var(--text-main)',
+};
+
+const floatingPayButtonStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: '20px',
+  right: '20px',
+  zIndex: 1000,
+  backgroundColor: 'var(--primary, #6366f1)',
+  color: 'white',
+  border: 'none',
+  borderRadius: '50px',
+  padding: '0.85rem 1.75rem',
+  fontSize: '1rem',
+  fontWeight: 'bold',
+  cursor: 'pointer',
+  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.4)',
+  transition: 'transform 0.2s, background-color 0.2s',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  letterSpacing: '0.05em',
+};
+
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  width: '100vw',
+  height: '100vh',
+  backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  backdropFilter: 'blur(4px)',
+  display: 'grid',
+  placeItems: 'center',
+  padding: '1rem',
+  zIndex: 2000,
+  overflowY: 'auto',
+};
+
+const modalStyle: React.CSSProperties = {
+  width: '100%',
+  maxWidth: '400px',
+  padding: '1.5rem',
+  boxShadow: 'var(--shadow-lg)',
+  background: '#181b21',
+  borderRadius: '12px',
+  border: '1px solid var(--border-color, rgba(255,255,255,0.1))',
+  color: 'white',
+};
+
+const modalHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '1rem',
+};
+
+const closeBtnStyle: React.CSSProperties = {
+  background: 'none',
+  border: 'none',
+  color: 'var(--text-muted, #9ca3af)',
+  fontSize: '1.25rem',
+  cursor: 'pointer',
+};
+
+const formStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '1rem',
+};
+
+const inputGroupStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.5rem',
+};
+
+const errorStyle: React.CSSProperties = {
+  backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  border: '1px solid rgba(239, 68, 68, 0.3)',
+  color: '#f87171',
+  padding: '0.75rem',
+  borderRadius: '6px',
+  fontSize: '0.875rem',
+  marginBottom: '1rem',
+};
+
+const footerStyle: React.CSSProperties = {
+  display: 'flex',
+  justifyContent: 'flex-end',
+  gap: '0.75rem',
+  marginTop: '1rem',
 };
 
 export default App;

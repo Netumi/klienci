@@ -1,0 +1,105 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { amount } = req.body;
+
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ error: 'Nieprawidłowa kwota' });
+    }
+
+    const clientId = process.env.TPAY_CLIENT_ID;
+    const clientSecret = process.env.TPAY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      console.error('Brak zmiennych środowiskowych Tpay (TPAY_CLIENT_ID / TPAY_CLIENT_SECRET)');
+      return res.status(500).json({ error: 'Brak konfiguracji Tpay w zmiennych środowiskowych' });
+    }
+
+    // Step 1: Get OAuth2 token from Tpay
+    const authResponse = await fetch('https://openapi.tpay.com/oauth/auth', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        grant_type: 'client_credentials',
+      }).toString(),
+    });
+
+    if (!authResponse.ok) {
+      const errorText = await authResponse.text();
+      console.error('Tpay Auth Error:', errorText);
+      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay', details: errorText });
+    }
+
+    const authData = await authResponse.json();
+    const accessToken = authData.access_token;
+
+    if (!accessToken) {
+      console.error('Brak access_token w odpowiedzi Tpay:', authData);
+      return res.status(500).json({ error: 'Brak tokena dostępu z Tpay' });
+    }
+
+    const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const host = req.headers.host;
+    const successUrl = `${protocol}://${host}/?success=true`;
+    const errorUrl = `${protocol}://${host}/?error=true`;
+    const webhookUrl = `${protocol}://${host}/api/webhook`;
+
+    // Step 2: Create transaction
+    const transactionResponse = await fetch('https://openapi.tpay.com/transactions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        amount: Number(amount),
+        description: `Opłata w systemie Klienci App - ${amount} PLN`,
+        lang: 'pl',
+        payer: {
+          email: 'klient@testowy.pl',
+          name: 'Klient Testowy',
+        },
+        callbacks: {
+          payerUrls: {
+            success: successUrl,
+            error: errorUrl,
+          },
+          notification: {
+            url: webhookUrl,
+          },
+        },
+      }),
+    });
+
+    if (!transactionResponse.ok) {
+      const txErrorText = await transactionResponse.text();
+      console.error('Tpay Transaction Error:', txErrorText);
+      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay', details: txErrorText });
+    }
+
+    const txData = await transactionResponse.json();
+    const paymentUrl = txData.transactionPaymentUrl || txData.url;
+
+    if (!paymentUrl) {
+      console.error('Brak transactionPaymentUrl w odpowiedzi Tpay:', txData);
+      return res.status(500).json({ error: 'Brak adresu URL płatności w odpowiedzi Tpay' });
+    }
+
+    return res.status(200).json({ url: paymentUrl });
+  } catch (error) {
+    console.error('Checkout API Error:', error);
+    return res.status(500).json({ 
+      error: 'Wystąpił błąd podczas tworzenia płatności', 
+      details: error instanceof Error ? error.message : String(error) 
+    });
+  }
+}
