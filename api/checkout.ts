@@ -28,17 +28,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Brak konfiguracji Tpay w zmiennych środowiskowych' });
     }
 
-    // Step 1: Get OAuth2 token from Tpay
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
+    // Step 1: Get OAuth2 token from Tpay with browser User-Agent and encoded body
+    const authParams = new URLSearchParams();
+    authParams.append('client_id', clientId);
+    authParams.append('client_secret', clientSecret);
+    authParams.append('grant_type', 'client_credentials');
+
     const authResponse = await fetch('https://openapi.tpay.com/oauth/auth', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': userAgent,
       },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        grant_type: 'client_credentials',
-      }).toString(),
+      body: authParams.toString(),
     });
 
     if (!authResponse.ok) {
@@ -61,12 +65,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const errorUrl = `${protocol}://${host}/?error=true`;
     const webhookUrl = `${protocol}://${host}/api/webhook`;
 
-    // Step 2: Create transaction with dynamic payer details
+    // Step 2: Create transaction with browser User-Agent
     const transactionResponse = await fetch('https://openapi.tpay.com/transactions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
+        'User-Agent': userAgent,
       },
       body: JSON.stringify({
         amount: Number(amount),
