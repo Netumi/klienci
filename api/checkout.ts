@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
     const origin = `${protocol}://${host}`;
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    const authority = 'https://openapi.tpay.com';
+    const authority = 'https://api.tpay.com';
 
     // Step 1: Get OAuth2 token via HTTP/2 without grant_type
     const authParams = new URLSearchParams();
