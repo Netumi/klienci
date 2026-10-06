@@ -42,7 +42,11 @@ function App() {
       }
 
       const params = new URLSearchParams(window.location.search);
-      const tpayId = params.get('tpayId') || params.get('id');
+      let tpayId = params.get('tpayId') || params.get('id');
+
+      if (!tpayId) {
+        tpayId = localStorage.getItem('tpay_transaction_id');
+      }
 
       if (tpayId) {
         try {
@@ -55,8 +59,10 @@ function App() {
         } catch (err) {
           console.error('Error checking payment status:', err);
         } finally {
-          // Clean up query parameters from URL without reloading page
-          window.history.replaceState({}, document.title, window.location.pathname);
+          // Clean up query parameters from URL without reloading page if tpayId was in URL
+          if (params.get('tpayId') || params.get('id')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
         }
       }
     };
