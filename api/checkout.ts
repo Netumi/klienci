@@ -28,9 +28,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Brak konfiguracji Tpay w zmiennych środowiskowych' });
     }
 
-    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const host = req.headers.host || 'localhost';
+    const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
+    const origin = `${protocol}://${host}`;
+    const referer = `${origin}/`;
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
-    // Step 1: Get OAuth2 token from Tpay with browser User-Agent and encoded body
+    // Step 1: Get OAuth2 token from Tpay with advanced headers and URLSearchParams
     const authParams = new URLSearchParams();
     authParams.append('client_id', clientId);
     authParams.append('client_secret', clientSecret);
@@ -41,6 +45,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': userAgent,
+        'Accept': 'application/json',
+        'Origin': origin,
+        'Referer': referer,
       },
       body: authParams.toString(),
     });
@@ -59,19 +66,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Brak tokena dostępu z Tpay' });
     }
 
-    const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
-    const host = req.headers.host;
-    const successUrl = `${protocol}://${host}/?success=true`;
-    const errorUrl = `${protocol}://${host}/?error=true`;
-    const webhookUrl = `${protocol}://${host}/api/webhook`;
+    const successUrl = `${origin}/?success=true`;
+    const errorUrl = `${origin}/?error=true`;
+    const webhookUrl = `${origin}/api/webhook`;
 
-    // Step 2: Create transaction with browser User-Agent
+    // Step 2: Create transaction with advanced headers and Bearer authorization
     const transactionResponse = await fetch('https://openapi.tpay.com/transactions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'User-Agent': userAgent,
+        'Accept': 'application/json',
+        'Origin': origin,
+        'Referer': referer,
       },
       body: JSON.stringify({
         amount: Number(amount),
