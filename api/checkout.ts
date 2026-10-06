@@ -1,36 +1,31 @@
 import http2 from 'node:http2';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-function http2Post(authority: string, path: string, headers: Record<string, string>, body: string): Promise<{ status: number; body: string }> {
+function http2Post(authority: string, path: string, headers: Record<string, string | number>, body: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
     const client = http2.connect(authority);
     client.on('error', (err) => reject(err));
-
     const req = client.request({
       ':method': 'POST',
       ':path': path,
-      ...headers,
+      ...headers
     });
-
-    let data = '';
-    req.setEncoding('utf8');
-
+    let responseData = '';
+    let responseStatus = 200;
     req.on('response', (resHeaders) => {
-      const status = Number(resHeaders[':status'] || 500);
-      req.on('data', (chunk) => {
-        data += chunk;
-      });
-      req.on('end', () => {
-        client.close();
-        resolve({ status, body: data });
-      });
+      responseStatus = Number(resHeaders[':status'] || 200);
     });
-
+    req.on('data', (chunk) => {
+      responseData += chunk;
+    });
+    req.on('end', () => {
+      client.close();
+      resolve({ status: responseStatus, body: responseData });
+    });
     req.on('error', (err) => {
       client.close();
       reject(err);
     });
-
     req.write(body);
     req.end();
   });
@@ -70,11 +65,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const authority = 'https://openapi.tpay.com';
 
-    // Step 1: Get OAuth2 token via HTTP/2
+    // Step 1: Get OAuth2 token via HTTP/2 without grant_type
     const authParams = new URLSearchParams();
     authParams.append('client_id', clientId);
     authParams.append('client_secret', clientSecret);
-    authParams.append('grant_type', 'client_credentials');
     const authBody = authParams.toString();
 
     const authResult = await http2Post(authority, '/oauth/auth', {
@@ -86,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }, authBody);
 
     if (authResult.status !== 200 && authResult.status !== 201) {
-      console.error('Tpay HTTP/2 Auth Error:', authResult.body);
+      console.error('Tpay HTTP/2 Auth Error:', authResult.status, authResult.body);
       return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay przez HTTP/2', details: authResult.body });
     }
 
@@ -128,7 +122,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     });
 
-    // Step 2: Create transaction via HTTP/2
+    // Step 2: Create transaction via HTTP/2 with Bearer token
     const txResult = await http2Post(authority, '/transactions', {
       'authorization': `Bearer ${accessToken}`,
       'content-type': 'application/json',
@@ -139,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }, txPayload);
 
     if (txResult.status !== 200 && txResult.status !== 201) {
-      console.error('Tpay HTTP/2 Transaction Error:', txResult.body);
+      console.error('Tpay HTTP/2 Transaction Error:', txResult.status, txResult.body);
       return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay przez HTTP/2', details: txResult.body });
     }
 
