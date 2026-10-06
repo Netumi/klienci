@@ -1,6 +1,5 @@
 import http2 from 'node:http2';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from './lib/prisma.js';
 
 function http2Get(authority: string, path: string, headers: Record<string, string | number>): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -67,104 +66,81 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const txId = (req.query.id || req.query.tpayId) as string;
+    // 1. Endpoint przyjmuje metodą GET parametr transactionId z adresu URL (query)
+    const transactionId = (req.query.transactionId || req.query.id || req.query.tpayId) as string;
 
-    if (!txId) {
-      return res.status(400).json({ paid: false, error: 'Brak identyfikatora transakcji (id lub tpayId)' });
+    if (!transactionId) {
+      return res.status(400).json({ paid: false, error: 'Brak transactionId' });
     }
 
-    const tx = await prisma.transaction.findUnique({
-      where: { tpayId: txId }
-    });
-
-    if (tx && tx.status === 'PAID') {
-      return res.status(200).json({ paid: true });
-    }
-
-    // If transaction is still PENDING in DB, let's query Tpay Sandbox API directly to verify
     const clientId = process.env.TPAY_CLIENT_ID;
     const clientSecret = process.env.TPAY_CLIENT_SECRET;
 
-    if (clientId && clientSecret) {
-      try {
-        const authority = 'https://openapi.sandbox.tpay.com';
-        const userAgent = 'Mozilla/5.0';
-
-        // 1. Get OAuth token
-        const authParams = new URLSearchParams();
-        authParams.append('client_id', clientId);
-        authParams.append('client_secret', clientSecret);
-        const authBody = authParams.toString();
-
-        const authResult = await http2Post(authority, '/oauth/auth', {
-          'content-type': 'application/x-www-form-urlencoded',
-          'content-length': Buffer.byteLength(authBody),
-          'user-agent': userAgent,
-          'accept': 'application/json',
-        }, authBody);
-
-        if (authResult.status === 200 || authResult.status === 201) {
-          const authData = JSON.parse(authResult.body);
-          const accessToken = authData.access_token;
-
-          if (accessToken) {
-            // 2. Query Tpay transactions using crc or transaction id
-            const txResult = await http2Get(authority, `/transactions?crc=${encodeURIComponent(txId)}`, {
-              'authorization': `Bearer ${accessToken}`,
-              'user-agent': userAgent,
-              'accept': 'application/json',
-            });
-
-            if (txResult.status === 200) {
-              const txListData = JSON.parse(txResult.body);
-              // Check if any transaction matches and is paid/correct
-              const transactions = Array.isArray(txListData) ? txListData : (txListData.transactions || txListData.result || []);
-              const found = transactions.find((t: any) => 
-                t.crc === txId || t.id === txId || t.transactionId === txId
-              );
-
-              const isPaidInTpay = found && (
-                found.status === 'correct' || 
-                found.status === 'paid' || 
-                found.status === 'TRUE' || 
-                found.status === 3 ||
-                found.tr_status === 'TRUE'
-              );
-
-              if (isPaidInTpay || found) {
-                // Update DB to PAID
-                await prisma.transaction.updateMany({
-                  where: { tpayId: txId },
-                  data: { status: 'PAID' }
-                });
-                return res.status(200).json({ paid: true });
-              }
-            }
-          }
-        }
-      } catch (tpayApiErr) {
-        console.error('Error querying Tpay API in check-status:', tpayApiErr);
-      }
+    if (!clientId || !clientSecret) {
+      console.error('Brak zmiennych środowiskowych Tpay (TPAY_CLIENT_ID / TPAY_CLIENT_SECRET)');
+      return res.status(500).json({ paid: false, error: 'Brak konfiguracji Tpay' });
     }
 
-    // Fallback for local testing: if transaction exists and user returned, in sandbox testing mode
-    // we can also mark it as paid if requested or if local webhook couldn't reach.
-    // To ensure the user's experience works seamlessly in sandbox even without public webhook URL:
-    if (tx) {
-      // In sandbox mode, when returning from Tpay gateway, we can verify and mark as paid
-      await prisma.transaction.update({
-        where: { id: tx.id },
-        data: { status: 'PAID' }
-      });
-      return res.status(200).json({ paid: true });
+    const authority = 'https://openapi.sandbox.tpay.com';
+
+    // 2. Najpierw pobiera token OAuth2 przez HTTP/2 z adresu https://openapi.sandbox.tpay.com/oauth/auth
+    const authParams = new URLSearchParams();
+    authParams.append('client_id', clientId);
+    authParams.append('client_secret', clientSecret);
+    const authBody = authParams.toString();
+
+    const authResult = await http2Post(authority, '/oauth/auth', {
+      'content-type': 'application/x-www-form-urlencoded',
+      'content-length': Buffer.byteLength(authBody),
+      'user-agent': 'Mozilla/5.0',
+      'accept': 'application/json',
+    }, authBody);
+
+    if (authResult.status !== 200 && authResult.status !== 201) {
+      console.error('Tpay Auth Error:', authResult.status, authResult.body);
+      return res.status(500).json({ paid: false, error: 'Błąd uwierzytelniania w Tpay' });
     }
 
-    // Check recent paid fallback
-    const recentPaid = await prisma.transaction.findFirst({
-      where: { status: 'PAID' },
-      orderBy: { updatedAt: 'desc' }
+    let authData: any;
+    try {
+      authData = JSON.parse(authResult.body);
+    } catch (e) {
+      console.error('Tpay Auth Parse Error:', authResult.body);
+      return res.status(500).json({ paid: false, error: 'Błąd parsowania tokena Tpay' });
+    }
+
+    const accessToken = authData.access_token;
+    if (!accessToken) {
+      console.error('Brak access_token w odpowiedzi Tpay:', authData);
+      return res.status(500).json({ paid: false, error: 'Brak tokena dostępu Tpay' });
+    }
+
+    // 3. Następnie wysyła żądanie GET przez HTTP/2 na serwer Tpay, na adres: https://openapi.sandbox.tpay.com/transactions/TUTAJ_ID_TRANSAKCJI
+    const txResult = await http2Get(authority, `/transactions/${encodeURIComponent(transactionId)}`, {
+      'authorization': 'Bearer ' + accessToken,
+      'user-agent': 'Mozilla/5.0',
+      'accept': 'application/json',
     });
-    if (recentPaid) {
+
+    if (txResult.status !== 200) {
+      console.error('Tpay Transaction Status API Error:', txResult.status, txResult.body);
+      return res.status(200).json({ paid: false });
+    }
+
+    let txData: any;
+    try {
+      txData = JSON.parse(txResult.body);
+    } catch (e) {
+      console.error('Tpay Transaction Status Parse Error:', txResult.body);
+      return res.status(200).json({ paid: false });
+    }
+
+    // 4. Sprawdź w nim pole 'status'. Jeśli status wynosi 'correct', oznacza to, że transakcja jest opłacona.
+    const status = txData.status || txData.tr_status;
+    const isPaid = status === 'correct' || status === 'paid' || status === 'TRUE' || status === 3;
+
+    // 5. Zwróć do frontendu JSON: { paid: true } lub { paid: false }
+    if (isPaid) {
       return res.status(200).json({ paid: true });
     }
 

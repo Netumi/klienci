@@ -33,7 +33,7 @@ function App() {
     fetchClients();
   }, [fetchClients]);
 
-  // Check payment status on return from Tpay or localStorage persistence
+  // Check payment status on return from Tpay by querying Tpay API directly via /api/check-status
   useEffect(() => {
     const checkPaymentReturn = async () => {
       const storedPaid = localStorage.getItem('tpay_paid') === 'true';
@@ -42,15 +42,15 @@ function App() {
       }
 
       const params = new URLSearchParams(window.location.search);
-      let tpayId = params.get('tpayId') || params.get('id');
+      let txId = params.get('transactionId') || params.get('tpayId') || params.get('id');
 
-      if (!tpayId) {
-        tpayId = localStorage.getItem('tpay_transaction_id');
+      if (!txId) {
+        txId = localStorage.getItem('tpay_transaction_id');
       }
 
-      if (tpayId) {
+      if (txId) {
         try {
-          const res = await fetch(`/api/check-status?id=${encodeURIComponent(tpayId)}`);
+          const res = await fetch(`/api/check-status?transactionId=${encodeURIComponent(txId)}`);
           const data = await res.json();
           if (data && data.paid) {
             setIsPaid(true);
@@ -59,8 +59,7 @@ function App() {
         } catch (err) {
           console.error('Error checking payment status:', err);
         } finally {
-          // Clean up query parameters from URL without reloading page if tpayId was in URL
-          if (params.get('tpayId') || params.get('id')) {
+          if (params.get('transactionId') || params.get('tpayId') || params.get('id')) {
             window.history.replaceState({}, document.title, window.location.pathname);
           }
         }

@@ -1,6 +1,5 @@
 import http2 from 'node:http2';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { prisma } from './lib/prisma.js';
 
 function http2Post(authority: string, path: string, headers: Record<string, string | number>, body: string): Promise<{ status: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -67,24 +66,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
     const authority = 'https://openapi.sandbox.tpay.com';
 
-    // Generate unique transaction identifier for our DB and success callback
-    const uniqueTxId = 'tpay_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-
-    // Save pending transaction in database
-    try {
-      await prisma.transaction.create({
-        data: {
-          tpayId: uniqueTxId,
-          status: 'PENDING',
-          amount: parsedAmount,
-          email: email.trim(),
-          name: name.trim(),
-        }
-      });
-    } catch (dbErr) {
-      console.error('Database error saving transaction:', dbErr);
-    }
-
     // Step 1: Get OAuth2 token via HTTP/2
     const authParams = new URLSearchParams();
     authParams.append('client_id', clientId);
@@ -118,19 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Brak tokena dostępu z Tpay Sandbox', details: authData });
     }
 
-    // Step 2: Create transaction payload matching user specification exactly
+    // Step 2: Create transaction payload
     const txPayload = JSON.stringify({
       amount: parsedAmount,
       description: "Opłata w systemie Klienci App",
       lang: "pl",
-      crc: uniqueTxId,
       payer: {
         email: email.trim(),
         name: name.trim(),
       },
       callbacks: {
         payerUrls: {
-          success: `${origin}/?tpayId=${uniqueTxId}`,
+          success: `${origin}/`,
           error: `${origin}/?error=1`
         },
         notification: {
@@ -163,6 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const paymentUrl = txData.transactionPaymentUrl || txData.url;
+    const tpayGatewayId = txData.transactionId || txData.id;
 
     if (!paymentUrl) {
       console.error('Brak transactionPaymentUrl w odpowiedzi Tpay Sandbox:', txData);
@@ -171,7 +152,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ 
       url: paymentUrl, 
-      transactionId: uniqueTxId 
+      transactionId: tpayGatewayId 
     });
   } catch (error) {
     console.error('Checkout API Sandbox HTTP/2 Error:', error);
