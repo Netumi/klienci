@@ -63,7 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
     const origin = `${protocol}://${host}`;
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-    const authority = 'https://api.tpay.com';
+    const authority = 'https://openapi.sandbox.tpay.com';
 
     // Step 1: Get OAuth2 token via HTTP/2 without grant_type
     const authParams = new URLSearchParams();
@@ -80,8 +80,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }, authBody);
 
     if (authResult.status !== 200 && authResult.status !== 201) {
-      console.error('Tpay HTTP/2 Auth Error:', authResult.status, authResult.body);
-      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay przez HTTP/2', details: authResult.body });
+      console.error('Tpay Sandbox HTTP/2 Auth Error:', authResult.status, authResult.body);
+      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay Sandbox przez HTTP/2', details: authResult.body });
     }
 
     let authData: any;
@@ -89,13 +89,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       authData = JSON.parse(authResult.body);
     } catch (e) {
       console.error('Tpay Auth Parse Error:', authResult.body);
-      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi tokena Tpay', details: authResult.body });
+      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi tokena Tpay Sandbox', details: authResult.body });
     }
 
     const accessToken = authData.access_token;
     if (!accessToken) {
-      console.error('Brak access_token w odpowiedzi Tpay:', authData);
-      return res.status(500).json({ error: 'Brak tokena dostępu z Tpay', details: authData });
+      console.error('Brak access_token w odpowiedzi Tpay Sandbox:', authData);
+      return res.status(500).json({ error: 'Brak tokena dostępu z Tpay Sandbox', details: authData });
     }
 
     const successUrl = `${origin}/?success=true`;
@@ -104,7 +104,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const txPayload = JSON.stringify({
       amount: Number(amount),
-      description: `Opłata - ${name.trim()} (${amount} PLN)`,
+      description: `Opłata Sandbox - ${name.trim()} (${amount} PLN)`,
       lang: 'pl',
       payer: {
         email: email.trim(),
@@ -133,8 +133,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }, txPayload);
 
     if (txResult.status !== 200 && txResult.status !== 201) {
-      console.error('Tpay HTTP/2 Transaction Error:', txResult.status, txResult.body);
-      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay przez HTTP/2', details: txResult.body });
+      console.error('Tpay Sandbox HTTP/2 Transaction Error:', txResult.status, txResult.body);
+      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay Sandbox przez HTTP/2', details: txResult.body });
     }
 
     let txData: any;
@@ -142,20 +142,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       txData = JSON.parse(txResult.body);
     } catch (e) {
       console.error('Tpay Transaction Parse Error:', txResult.body);
-      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi transakcji Tpay', details: txResult.body });
+      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi transakcji Tpay Sandbox', details: txResult.body });
     }
 
     const paymentUrl = txData.transactionPaymentUrl || txData.url;
     if (!paymentUrl) {
-      console.error('Brak transactionPaymentUrl w odpowiedzi Tpay:', txData);
-      return res.status(500).json({ error: 'Brak adresu URL płatności w odpowiedzi Tpay', details: txData });
+      console.error('Brak transactionPaymentUrl w odpowiedzi Tpay Sandbox:', txData);
+      return res.status(500).json({ error: 'Brak adresu URL płatności w odpowiedzi Tpay Sandbox', details: txData });
     }
 
     return res.status(200).json({ url: paymentUrl });
   } catch (error) {
-    console.error('Checkout API HTTP/2 Error:', error);
+    console.error('Checkout API Sandbox HTTP/2 Error:', error);
     return res.status(500).json({ 
-      error: 'Wystąpił błąd podczas komunikacji HTTP/2 z Tpay', 
+      error: 'Wystąpił błąd podczas komunikacji HTTP/2 z Tpay Sandbox', 
       details: error instanceof Error ? error.message : String(error) 
     });
   }
