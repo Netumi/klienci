@@ -1,4 +1,40 @@
+import http2 from 'node:http2';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+function http2Post(authority: string, path: string, headers: Record<string, string>, body: string): Promise<{ status: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const client = http2.connect(authority);
+    client.on('error', (err) => reject(err));
+
+    const req = client.request({
+      ':method': 'POST',
+      ':path': path,
+      ...headers,
+    });
+
+    let data = '';
+    req.setEncoding('utf8');
+
+    req.on('response', (resHeaders) => {
+      const status = Number(resHeaders[':status'] || 500);
+      req.on('data', (chunk) => {
+        data += chunk;
+      });
+      req.on('end', () => {
+        client.close();
+        resolve({ status, body: data });
+      });
+    });
+
+    req.on('error', (err) => {
+      client.close();
+      reject(err);
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -31,93 +67,101 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const host = req.headers.host || 'localhost';
     const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
     const origin = `${protocol}://${host}`;
-    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+    const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+    const authority = 'https://openapi.tpay.com';
 
-    // Step 1: Get OAuth2 token from Tpay via corsproxy.io without Referer header
+    // Step 1: Get OAuth2 token via HTTP/2
     const authParams = new URLSearchParams();
     authParams.append('client_id', clientId);
     authParams.append('client_secret', clientSecret);
     authParams.append('grant_type', 'client_credentials');
+    const authBody = authParams.toString();
 
-    const authResponse = await fetch('https://corsproxy.io/?https://openapi.tpay.com/oauth/auth', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': userAgent,
-        'Accept': 'application/json',
-        'Origin': origin,
-      },
-      body: authParams.toString(),
-    });
+    const authResult = await http2Post(authority, '/oauth/auth', {
+      'content-type': 'application/x-www-form-urlencoded',
+      'content-length': Buffer.byteLength(authBody),
+      'user-agent': userAgent,
+      'accept': 'application/json',
+      'origin': origin,
+    }, authBody);
 
-    if (!authResponse.ok) {
-      const errorText = await authResponse.text();
-      console.error('Tpay Auth Error:', errorText);
-      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay przez proxy', details: errorText });
+    if (authResult.status !== 200 && authResult.status !== 201) {
+      console.error('Tpay HTTP/2 Auth Error:', authResult.body);
+      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay przez HTTP/2', details: authResult.body });
     }
 
-    const authData = await authResponse.json();
-    const accessToken = authData.access_token;
+    let authData: any;
+    try {
+      authData = JSON.parse(authResult.body);
+    } catch (e) {
+      console.error('Tpay Auth Parse Error:', authResult.body);
+      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi tokena Tpay', details: authResult.body });
+    }
 
+    const accessToken = authData.access_token;
     if (!accessToken) {
       console.error('Brak access_token w odpowiedzi Tpay:', authData);
-      return res.status(500).json({ error: 'Brak tokena dostępu z Tpay' });
+      return res.status(500).json({ error: 'Brak tokena dostępu z Tpay', details: authData });
     }
 
     const successUrl = `${origin}/?success=true`;
     const errorUrl = `${origin}/?error=true`;
     const webhookUrl = `${origin}/api/webhook`;
 
-    // Step 2: Create transaction via corsproxy.io without Referer header
-    const transactionResponse = await fetch('https://corsproxy.io/?https://openapi.tpay.com/transactions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'User-Agent': userAgent,
-        'Accept': 'application/json',
-        'Origin': origin,
+    const txPayload = JSON.stringify({
+      amount: Number(amount),
+      description: `Opłata - ${name.trim()} (${amount} PLN)`,
+      lang: 'pl',
+      payer: {
+        email: email.trim(),
+        name: name.trim(),
+        ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
       },
-      body: JSON.stringify({
-        amount: Number(amount),
-        description: `Opłata - ${name.trim()} (${amount} PLN)`,
-        lang: 'pl',
-        payer: {
-          email: email.trim(),
-          name: name.trim(),
-          ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
+      callbacks: {
+        payerUrls: {
+          success: successUrl,
+          error: errorUrl,
         },
-        callbacks: {
-          payerUrls: {
-            success: successUrl,
-            error: errorUrl,
-          },
-          notification: {
-            url: webhookUrl,
-          },
+        notification: {
+          url: webhookUrl,
         },
-      }),
+      },
     });
 
-    if (!transactionResponse.ok) {
-      const txErrorText = await transactionResponse.text();
-      console.error('Tpay Transaction Error:', txErrorText);
-      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay przez proxy', details: txErrorText });
+    // Step 2: Create transaction via HTTP/2
+    const txResult = await http2Post(authority, '/transactions', {
+      'authorization': `Bearer ${accessToken}`,
+      'content-type': 'application/json',
+      'content-length': Buffer.byteLength(txPayload),
+      'user-agent': userAgent,
+      'accept': 'application/json',
+      'origin': origin,
+    }, txPayload);
+
+    if (txResult.status !== 200 && txResult.status !== 201) {
+      console.error('Tpay HTTP/2 Transaction Error:', txResult.body);
+      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay przez HTTP/2', details: txResult.body });
     }
 
-    const txData = await transactionResponse.json();
-    const paymentUrl = txData.transactionPaymentUrl || txData.url;
+    let txData: any;
+    try {
+      txData = JSON.parse(txResult.body);
+    } catch (e) {
+      console.error('Tpay Transaction Parse Error:', txResult.body);
+      return res.status(500).json({ error: 'Nie udało się sparsować odpowiedzi transakcji Tpay', details: txResult.body });
+    }
 
+    const paymentUrl = txData.transactionPaymentUrl || txData.url;
     if (!paymentUrl) {
       console.error('Brak transactionPaymentUrl w odpowiedzi Tpay:', txData);
-      return res.status(500).json({ error: 'Brak adresu URL płatności w odpowiedzi Tpay' });
+      return res.status(500).json({ error: 'Brak adresu URL płatności w odpowiedzi Tpay', details: txData });
     }
 
     return res.status(200).json({ url: paymentUrl });
   } catch (error) {
-    console.error('Checkout API Error:', error);
+    console.error('Checkout API HTTP/2 Error:', error);
     return res.status(500).json({ 
-      error: 'Wystąpił błąd podczas tworzenia płatności przez proxy', 
+      error: 'Wystąpił błąd podczas komunikacji HTTP/2 z Tpay', 
       details: error instanceof Error ? error.message : String(error) 
     });
   }
