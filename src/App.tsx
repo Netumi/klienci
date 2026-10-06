@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useClientStore, ClientStatus } from './store/clientStore';
 import { ClientList } from './components/ClientList';
 import { ClientModal } from './components/ClientModal';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, RotateCcw } from 'lucide-react';
 
 function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,6 +13,7 @@ function App() {
   const [payPhone, setPayPhone] = useState('');
   const [isPayLoading, setIsPayLoading] = useState(false);
   const [payError, setPayError] = useState('');
+  const [isPaid, setIsPaid] = useState(false);
 
   const { clients, searchQuery, setSearchQuery, filterStatus, setFilterStatus, fetchClients } = useClientStore();
 
@@ -28,9 +29,52 @@ function App() {
     } as Record<string, number>;
   }, [clients]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchClients();
   }, [fetchClients]);
+
+  // Check payment status on return from Tpay or localStorage persistence
+  useEffect(() => {
+    const checkPaymentReturn = async () => {
+      const storedPaid = localStorage.getItem('tpay_paid') === 'true';
+      if (storedPaid) {
+        setIsPaid(true);
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const tpayId = params.get('tpayId') || params.get('id');
+
+      if (tpayId) {
+        try {
+          const res = await fetch(`/api/check-status?id=${encodeURIComponent(tpayId)}`);
+          const data = await res.json();
+          if (data && data.paid) {
+            setIsPaid(true);
+            localStorage.setItem('tpay_paid', 'true');
+          }
+        } catch (err) {
+          console.error('Error checking payment status:', err);
+        } finally {
+          // Clean up query parameters from URL without reloading page
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+    };
+
+    checkPaymentReturn();
+  }, []);
+
+  const handleReset = () => {
+    localStorage.removeItem('tpay_paid');
+    localStorage.removeItem('tpay_transaction_id');
+    setIsPaid(false);
+    setPayAmount('100.00');
+    setPayName('');
+    setPayEmail('');
+    setPayPhone('');
+    setPayError('');
+    setIsPayLoading(false);
+  };
 
   const handlePaySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +117,10 @@ function App() {
         const errorMsg = data.error || 'Błąd inicjalizacji płatności';
         const errorDetails = data.details ? ` | Debug: ${typeof data.details === 'object' ? JSON.stringify(data.details) : data.details}` : '';
         throw new Error(`${errorMsg}${errorDetails}`);
+      }
+
+      if (data.transactionId) {
+        localStorage.setItem('tpay_transaction_id', data.transactionId);
       }
 
       if (data.url) {
@@ -148,13 +196,26 @@ function App() {
         {isModalOpen && <ClientModal onClose={() => setIsModalOpen(false)} />}
       </div>
 
-      {/* Floating PAY button - placed outside container to ensure fixed positioning relative to viewport */}
+      {/* Floating RESET button (left of PAY button) */}
+      <button
+        onClick={handleReset}
+        style={floatingResetButtonStyle}
+        title="Resetuj stan płatności i formularz"
+      >
+        <RotateCcw size={16} />
+        RESET
+      </button>
+
+      {/* Floating PAY button - fixed bottom right, turns green when paid */}
       <button
         onClick={() => setIsPayModalOpen(true)}
-        style={floatingPayButtonStyle}
-        title="Zapłać przez Tpay"
+        style={{
+          ...floatingPayButtonStyle,
+          backgroundColor: isPaid ? '#10b981' : 'var(--primary, #6366f1)',
+        }}
+        title={isPaid ? 'Płatność zakończona sukcesem (Opłacone)' : 'Zapłać przez Tpay'}
       >
-        PAY
+        {isPaid ? 'PAY ✓' : 'PAY'}
       </button>
 
       {/* Payment Modal */}
@@ -338,7 +399,6 @@ const floatingPayButtonStyle: React.CSSProperties = {
   bottom: '20px',
   right: '20px',
   zIndex: 9999,
-  backgroundColor: 'var(--primary, #6366f1)',
   color: 'white',
   border: 'none',
   borderRadius: '50px',
@@ -353,6 +413,28 @@ const floatingPayButtonStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   letterSpacing: '0.05em',
+};
+
+const floatingResetButtonStyle: React.CSSProperties = {
+  position: 'fixed',
+  bottom: '20px',
+  right: '125px',
+  zIndex: 9999,
+  backgroundColor: '#4b5563',
+  color: 'white',
+  border: 'none',
+  borderRadius: '50px',
+  padding: '0.85rem 1.25rem',
+  fontSize: '0.875rem',
+  fontWeight: 'bold',
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+  transition: 'transform 0.2s, background-color 0.2s',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.35rem',
+  letterSpacing: '0.03em',
 };
 
 const overlayStyle: React.CSSProperties = {
