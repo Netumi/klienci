@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { amount, name, email, phone } = req.body;
+    const { amount, name, email } = req.body;
 
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
       return res.status(400).json({ error: 'Podaj prawidłową kwotę' });
@@ -98,31 +98,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(500).json({ error: 'Brak tokena dostępu z Tpay Sandbox', details: authData });
     }
 
-    const successUrl = `${origin}/?success=true`;
-    const errorUrl = `${origin}/?error=true`;
-    const webhookUrl = `${origin}/api/webhook`;
-
+    // Step 2: Create transaction payload matching user specification exactly
     const txPayload = JSON.stringify({
-      amount: Number(amount),
-      description: `Opłata Sandbox - ${name.trim()} (${amount} PLN)`,
-      lang: 'pl',
+      amount: parseFloat(req.body.amount),
+      description: "Zakupy w sklepie testowym",
+      lang: "pl",
       payer: {
-        email: email.trim(),
-        name: name.trim(),
-        ...(phone && phone.trim() ? { phone: phone.trim() } : {}),
+        email: req.body.email,
+        name: req.body.name,
+        phone: req.body.phone || null
       },
       callbacks: {
         payerUrls: {
-          success: successUrl,
-          error: errorUrl,
+          success: "https://" + req.headers.host + "/success",
+          error: "https://" + req.headers.host + "/error"
         },
         notification: {
-          url: webhookUrl,
-        },
-      },
+          url: "https://" + req.headers.host + "/api/webhook"
+        }
+      }
     });
 
-    // Step 2: Create transaction via HTTP/2 with Bearer token
+    // Step 3: Create transaction via HTTP/2 with Bearer token
     const txResult = await http2Post(authority, '/transactions', {
       'authorization': `Bearer ${accessToken}`,
       'content-type': 'application/json',
