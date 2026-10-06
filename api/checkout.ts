@@ -31,23 +31,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const host = req.headers.host || 'localhost';
     const protocol = (req.headers['x-forwarded-proto'] as string) || 'https';
     const origin = `${protocol}://${host}`;
-    const referer = `${origin}/`;
     const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
 
-    // Step 1: Get OAuth2 token from Tpay with advanced headers and URLSearchParams
+    // Step 1: Get OAuth2 token from Tpay via corsproxy.io without Referer header
     const authParams = new URLSearchParams();
     authParams.append('client_id', clientId);
     authParams.append('client_secret', clientSecret);
     authParams.append('grant_type', 'client_credentials');
 
-    const authResponse = await fetch('https://openapi.tpay.com/oauth/auth', {
+    const authResponse = await fetch('https://corsproxy.io/?https://openapi.tpay.com/oauth/auth', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': userAgent,
         'Accept': 'application/json',
         'Origin': origin,
-        'Referer': referer,
       },
       body: authParams.toString(),
     });
@@ -55,7 +53,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authResponse.ok) {
       const errorText = await authResponse.text();
       console.error('Tpay Auth Error:', errorText);
-      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay', details: errorText });
+      return res.status(500).json({ error: 'Nie udało się uwierzytelnić w Tpay przez proxy', details: errorText });
     }
 
     const authData = await authResponse.json();
@@ -70,8 +68,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const errorUrl = `${origin}/?error=true`;
     const webhookUrl = `${origin}/api/webhook`;
 
-    // Step 2: Create transaction with advanced headers and Bearer authorization
-    const transactionResponse = await fetch('https://openapi.tpay.com/transactions', {
+    // Step 2: Create transaction via corsproxy.io without Referer header
+    const transactionResponse = await fetch('https://corsproxy.io/?https://openapi.tpay.com/transactions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -79,7 +77,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'User-Agent': userAgent,
         'Accept': 'application/json',
         'Origin': origin,
-        'Referer': referer,
       },
       body: JSON.stringify({
         amount: Number(amount),
@@ -105,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!transactionResponse.ok) {
       const txErrorText = await transactionResponse.text();
       console.error('Tpay Transaction Error:', txErrorText);
-      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay', details: txErrorText });
+      return res.status(500).json({ error: 'Nie udało się utworzyć transakcji w Tpay przez proxy', details: txErrorText });
     }
 
     const txData = await transactionResponse.json();
@@ -120,7 +117,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     console.error('Checkout API Error:', error);
     return res.status(500).json({ 
-      error: 'Wystąpił błąd podczas tworzenia płatności', 
+      error: 'Wystąpił błąd podczas tworzenia płatności przez proxy', 
       details: error instanceof Error ? error.message : String(error) 
     });
   }
